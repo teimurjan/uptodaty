@@ -10,6 +10,12 @@
     "format": "biome format --write"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.53",
+    "@ai-sdk/openai": "^3.0.39",
+    "@tabler/icons-react": "^3.38.0",
+    "@upstash/redis": "^1.36.3",
+    "ai": "^6.0.108",
+    "framer-motion": "^12.34.4",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"
