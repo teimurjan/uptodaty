@@ -1,3 +1,4 @@
+import { createGitHubSource } from "./github";
 import { createHackerNewsSource } from "./hackernews";
 import { createRedditSource } from "./reddit";
 import type { RawArticle, Source, SourceResult } from "./types";
@@ -5,6 +6,7 @@ import type { RawArticle, Source, SourceResult } from "./types";
 const DEFAULT_SOURCES: Source[] = [
   createHackerNewsSource(),
   createRedditSource(),
+  createGitHubSource(),
 ];
 
 export async function fetchAllSources(

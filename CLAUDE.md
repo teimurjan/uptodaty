@@ -44,3 +44,9 @@ Set one of these in `.env.local` — the app auto-detects the provider:
 Optional (enables daily Redis cache — app works without it):
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
+
+Optional (enables persistent graph storage + cross-day relations):
+- `FALKORDB_HOST` (default: localhost)
+- `FALKORDB_PORT` (default: 6379)
+- `FALKORDB_USERNAME`
+- `FALKORDB_PASSWORD`

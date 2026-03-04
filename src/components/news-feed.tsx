@@ -1,9 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { useKeyboardNav } from "@/hooks/use-keyboard-nav";
-import { useNewsFeed } from "@/hooks/use-news-feed";
 import { useScrollTracker } from "@/hooks/use-scroll-tracker";
 import { useWheelNav } from "@/hooks/use-wheel-nav";
+import type { NewsItem } from "@/lib/types";
 import { EndCard } from "./end-card";
 import { ErrorScreen } from "./error-screen";
 import { LoadingScreen } from "./loading-screen";
@@ -11,12 +12,34 @@ import { NewsCard } from "./news-card";
 import { ScrollHint } from "./scroll-hint";
 import { TopBar } from "./top-bar";
 
-export function NewsFeed() {
-  const { news, loading, progress, error, refresh } = useNewsFeed();
+interface NewsFeedProps {
+  news: NewsItem[];
+  loading: boolean;
+  progress: number;
+  error: string | null;
+  refresh: () => void;
+  onOpenTree: (itemId: string) => void;
+  onCurrentItemChange?: (itemId: string | null) => void;
+}
+
+export function NewsFeed({
+  news,
+  loading,
+  progress,
+  error,
+  refresh,
+  onOpenTree,
+  onCurrentItemChange,
+}: NewsFeedProps) {
   const totalCards = news.length + 1;
   const { containerRef, currentIndex } = useScrollTracker(totalCards);
   useKeyboardNav(containerRef, currentIndex, totalCards);
   useWheelNav(containerRef, currentIndex, totalCards);
+
+  useEffect(() => {
+    const item = currentIndex < news.length ? news[currentIndex] : null;
+    onCurrentItemChange?.(item?.id ?? null);
+  }, [currentIndex, news, onCurrentItemChange]);
 
   return (
     <div className="relative h-full">
@@ -42,6 +65,7 @@ export function NewsFeed() {
                   index={i}
                   total={news.length}
                   scrollContainerRef={containerRef}
+                  onOpenTree={onOpenTree}
                 />
               </div>
             ))}

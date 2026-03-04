@@ -10,6 +10,7 @@ export const CATEGORY_COLORS: Record<NewsCategory, string> = {
   Regulation: "#ff8a80",
   Robotics: "#69f0ae",
   Vision: "#ffd740",
+  "GitHub Trending": "#f78166",
   General: "#e0e0e0",
 };
 

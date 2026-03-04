@@ -1,5 +1,6 @@
 "use client";
 
+import { IconExternalLink } from "@tabler/icons-react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import type { RefObject } from "react";
 import { useRef } from "react";
@@ -14,6 +15,7 @@ interface NewsCardProps {
   index: number;
   total: number;
   scrollContainerRef: RefObject<HTMLDivElement | null>;
+  onOpenTree: (itemId: string) => void;
 }
 
 export function NewsCard({
@@ -21,6 +23,7 @@ export function NewsCard({
   index,
   total,
   scrollContainerRef,
+  onOpenTree,
 }: NewsCardProps) {
   const color = getCategoryColor(item.category);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -42,7 +45,7 @@ export function NewsCard({
   return (
     <div
       ref={cardRef}
-      className="relative box-border flex h-full w-full shrink-0 snap-start flex-col justify-end bg-bg-dark px-6 pb-20"
+      className="relative box-border flex h-full w-full shrink-0 snap-start flex-col justify-end bg-bg-dark px-6 pb-24"
     >
       <div
         className="absolute inset-0 z-0"
@@ -68,7 +71,7 @@ export function NewsCard({
           {item.headline}
         </h1>
 
-        <p className="mb-5 font-body text-[15px] leading-relaxed text-text-secondary">
+        <p className="mb-6 font-body text-[15px] leading-relaxed text-text-secondary">
           {item.summary}
         </p>
 
@@ -77,14 +80,31 @@ export function NewsCard({
         <div className="flex items-center gap-4 font-mono text-[11px] text-text-secondary">
           {item.source && (
             <span className="flex items-center gap-1.5">
-              <span style={{ color }}>●</span> {item.source}
+              <span style={{ color }}>●</span>
+              {item.url ? (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 transition-colors hover:text-text-primary"
+                >
+                  {item.source}
+                  <IconExternalLink size={11} />
+                </a>
+              ) : (
+                item.source
+              )}
             </span>
           )}
-          {item.impact && (
-            <span className="rounded-sm bg-border px-2 py-0.5 text-[10px] tracking-[1px]">
-              {item.impact} IMPACT
-            </span>
-          )}
+
+          <button
+            type="button"
+            onClick={() => onOpenTree(item.id)}
+            className="ml-auto font-mono text-[10px] tracking-wide transition-colors hover:brightness-125"
+            style={{ color }}
+          >
+            Connections
+          </button>
         </div>
       </motion.div>
 

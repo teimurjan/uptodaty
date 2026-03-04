@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { NextResponse } from "next/server";
-import { getCachedNews, setCachedNews } from "@/lib/cache";
+import { getCachedNews, getRecentHeadlines, setCachedNews } from "@/lib/cache";
+import { deduplicateArticles } from "@/lib/dedup";
 import { resolveModel } from "@/lib/model";
 import { parseNewsJson } from "@/lib/parse-news";
 import { buildNewsPrompt } from "@/lib/prompt";
@@ -14,10 +15,14 @@ export async function GET(): Promise<NextResponse> {
       return NextResponse.json({ items: cached });
     }
 
-    const results = await fetchAllSources();
-    const articles = collectArticles(results);
+    const [results, pastHeadlines] = await Promise.all([
+      fetchAllSources(),
+      getRecentHeadlines(7),
+    ]);
 
-    if (articles.length === 0) {
+    const allArticles = collectArticles(results);
+
+    if (allArticles.length === 0) {
       const errors = results
         .filter((r) => r.error)
         .map((r) => `${r.sourceName}: ${r.error}`)
@@ -28,12 +33,19 @@ export async function GET(): Promise<NextResponse> {
       );
     }
 
-    const digest = formatSourceDigest(results);
+    const dedupedArticles = deduplicateArticles(allArticles);
+
+    const dedupedBySource = results.map((result) => ({
+      ...result,
+      articles: result.articles.filter((a) => dedupedArticles.includes(a)),
+    }));
+
+    const digest = formatSourceDigest(dedupedBySource);
     const model = resolveModel();
 
     const { text } = await generateText({
       model,
-      prompt: buildNewsPrompt(digest),
+      prompt: buildNewsPrompt(digest, pastHeadlines),
     });
 
     const items = parseNewsJson(text);

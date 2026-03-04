@@ -25,3 +25,13 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+.react-flow.react-flow {
+  background: var(--color-bg-dark);
+}
+
+.react-flow .react-flow__handle {
+  width: 6px;
+  height: 6px;
+  border: none;
+}

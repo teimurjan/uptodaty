@@ -22,7 +22,8 @@ const ibmPlexSans = IBM_Plex_Sans({
 
 export const metadata: Metadata = {
   title: "Uptodaty — Stay Up-to-Date in 10 Minutes",
-  description: "Stop scrolling Reddit, Hacker News and X. Uptodaty aggregates the 5–20 most important stories daily so you stay up-to-date in just 10 minutes.",
+  description:
+    "Stop scrolling Reddit, Hacker News and X. Uptodaty aggregates the 5–20 most important stories daily so you stay up-to-date in just 10 minutes.",
 };
 
 export default function RootLayout({

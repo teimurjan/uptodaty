@@ -1,5 +1,3 @@
-export type ImpactLevel = "HIGH" | "MEDIUM" | "LOW";
-
 export type NewsCategory =
   | "LLMs"
   | "Open Source"
@@ -10,13 +8,17 @@ export type NewsCategory =
   | "Regulation"
   | "Robotics"
   | "Vision"
+  | "GitHub Trending"
   | "General";
 
 export interface NewsItem {
+  id: string;
   headline: string;
   summary: string;
   takeaway?: string;
   category: NewsCategory;
   source?: string;
-  impact?: ImpactLevel;
+  url?: string;
+  date?: string;
+  relatedTo?: string[];
 }
