@@ -35,10 +35,13 @@ function createConnection(): FalkorDB | null {
 
   if (!host) return null;
 
+  const isCloud = host.includes(".cloud");
+
   return FalkorDB.connect({
     socket: {
       host,
       port: port ? Number.parseInt(port, 10) : 6379,
+      ...(isCloud ? { tls: true } : {}),
     },
     ...(username ? { username } : {}),
     ...(password ? { password } : {}),
@@ -51,10 +54,15 @@ async function getGraph(): Promise<Graph | null> {
   const connection = createConnection();
   if (!connection) return null;
 
-  db = await (connection as unknown as Promise<FalkorDB>);
-  graph = db.selectGraph(GRAPH_NAME);
-  await ensureIndexes(graph);
-  return graph;
+  try {
+    db = await (connection as unknown as Promise<FalkorDB>);
+    graph = db.selectGraph(GRAPH_NAME);
+    await ensureIndexes(graph);
+    return graph;
+  } catch (err) {
+    console.error("[graph] Connection failed:", err);
+    return null;
+  }
 }
 
 function todayDate(): string {

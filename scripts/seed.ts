@@ -368,10 +368,13 @@ const fixturesByDate: Record<string, NewsItem[]> = {
 };
 
 async function seed() {
+  const isCloud = FALKORDB_HOST.includes(".cloud");
+
   const db = await FalkorDB.connect({
     socket: {
       host: FALKORDB_HOST,
       port: FALKORDB_PORT,
+      ...(isCloud ? { tls: true } : {}),
     },
     ...(FALKORDB_USERNAME ? { username: FALKORDB_USERNAME } : {}),
     ...(FALKORDB_PASSWORD ? { password: FALKORDB_PASSWORD } : {}),
