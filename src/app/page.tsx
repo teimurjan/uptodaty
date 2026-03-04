@@ -51,7 +51,7 @@ export default function Home() {
             transition={springTransition}
           >
             <TreeView
-              items={feedState.news}
+              feedItems={feedState.news}
               focusedItemId={treeItem}
               onClose={() => setTreeItem(null)}
             />
@@ -63,7 +63,7 @@ export default function Home() {
         {treeOpen && treeItem && (
           <TreeOverlay
             key="tree-overlay"
-            items={feedState.news}
+            feedItems={feedState.news}
             focusedItemId={treeItem}
             onClose={() => setTreeItem(null)}
           />

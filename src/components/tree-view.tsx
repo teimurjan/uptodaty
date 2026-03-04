@@ -1,7 +1,13 @@
 "use client";
 
 import dagre from "@dagrejs/dagre";
-import { IconMinus, IconPlus, IconX } from "@tabler/icons-react";
+import {
+  IconLoader2,
+  IconMinus,
+  IconPlus,
+  IconSearch,
+  IconX,
+} from "@tabler/icons-react";
 import {
   type Edge,
   type Node,
@@ -9,7 +15,14 @@ import {
   type ReactFlowInstance,
   SmoothStepEdge,
 } from "@xyflow/react";
-import { type MouseEvent, useCallback, useMemo, useRef } from "react";
+import {
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { NewsItem } from "@/lib/types";
 import { TreeViewNode } from "./tree-view-node";
 import "@xyflow/react/dist/style.css";
@@ -97,18 +110,136 @@ function buildGraph(
   return { nodes, edges };
 }
 
+function buildSearchGraph(items: NewsItem[]): { nodes: Node[]; edges: Edge[] } {
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+
+  const edgeSet = new Set<string>();
+  const edges: Edge[] = [];
+  for (const item of items) {
+    for (const targetId of item.relatedTo ?? []) {
+      if (!itemMap.has(targetId)) continue;
+      const edgeKey = [item.id, targetId].sort().join("--");
+      if (edgeSet.has(edgeKey)) continue;
+      edgeSet.add(edgeKey);
+      edges.push({
+        id: `${item.id}-${targetId}`,
+        source: item.id,
+        target: targetId,
+        type: "smoothstep",
+        style: { stroke: "var(--color-border)", strokeWidth: 1.5 },
+      });
+    }
+  }
+
+  const g = new dagre.graphlib.Graph();
+  g.setDefaultEdgeLabel(() => ({}));
+  g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 60 });
+
+  for (const item of items) {
+    g.setNode(item.id, { width: NODE_WIDTH, height: NODE_HEIGHT });
+  }
+  for (const edge of edges) {
+    g.setEdge(edge.source, edge.target);
+  }
+
+  dagre.layout(g);
+
+  const nodes: Node[] = items.map((item) => {
+    const pos = g.node(item.id);
+    return {
+      id: item.id,
+      type: "treeNode",
+      position: { x: pos.x - NODE_WIDTH / 2, y: pos.y - NODE_HEIGHT / 2 },
+      data: {
+        headline: item.headline,
+        summary: item.summary,
+        url: item.url,
+        category: item.category,
+        date: item.date ?? new Date().toISOString().slice(0, 10),
+        isFocused: false,
+      },
+      draggable: false,
+      selectable: false,
+    };
+  });
+
+  return { nodes, edges };
+}
+
 interface TreeViewProps {
-  items: NewsItem[];
+  feedItems: NewsItem[];
   focusedItemId: string;
   onClose: () => void;
 }
 
-export function TreeView({ items, focusedItemId, onClose }: TreeViewProps) {
+export function TreeView({ feedItems, focusedItemId, onClose }: TreeViewProps) {
   const rfRef = useRef<ReactFlowInstance | null>(null);
+  const [graphItems, setGraphItems] = useState<NewsItem[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<NewsItem[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    fetch(
+      `/api/news/graph?mode=neighborhood&id=${encodeURIComponent(focusedItemId)}&depth=2`,
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.items?.length > 0) {
+          setGraphItems(data.items);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [focusedItemId]);
+
+  useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    setSearching(true);
+    searchTimeoutRef.current = setTimeout(() => {
+      fetch(
+        `/api/news/graph?mode=search&q=${encodeURIComponent(searchQuery.trim())}&k=20`,
+      )
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.items) setSearchResults(data.items);
+        })
+        .catch(() => {})
+        .finally(() => setSearching(false));
+    }, 400);
+
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [searchQuery]);
+
+  const activeItems = searchResults ?? graphItems ?? feedItems;
+  const isSearchMode = searchResults !== null;
 
   const { nodes, edges } = useMemo(
-    () => buildGraph(items, focusedItemId),
-    [items, focusedItemId],
+    () =>
+      isSearchMode
+        ? buildSearchGraph(activeItems)
+        : buildGraph(activeItems, focusedItemId),
+    [activeItems, focusedItemId, isSearchMode],
   );
 
   const fitViewOptions = useMemo(
@@ -132,9 +263,32 @@ export function TreeView({ items, focusedItemId, onClose }: TreeViewProps) {
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }, []);
 
+  useEffect(() => {
+    rfRef.current?.fitView(fitViewOptions);
+  }, [fitViewOptions]);
+
   return (
     <div className="relative h-full w-full">
-      <div className="absolute right-3 top-3 z-10 flex gap-1.5">
+      <div className="absolute left-3 right-3 top-3 z-10 flex items-center gap-1.5">
+        <div className="relative flex-1">
+          <IconSearch
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-tertiary"
+          />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search"
+            className="w-full rounded-lg bg-bg-card py-1.5 pl-8 pr-3 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-white/20"
+          />
+          {searching && (
+            <IconLoader2
+              size={14}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-text-tertiary"
+            />
+          )}
+        </div>
         <button
           type="button"
           onClick={zoomIn}
@@ -157,26 +311,37 @@ export function TreeView({ items, focusedItemId, onClose }: TreeViewProps) {
           <IconX size={16} />
         </button>
       </div>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onInit={(instance) => {
-          rfRef.current = instance;
-        }}
-        onNodeClick={handleNodeClick}
-        fitView
-        fitViewOptions={fitViewOptions}
-        panOnDrag
-        zoomOnScroll
-        zoomOnDoubleClick={false}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={false}
-        proOptions={{ hideAttribution: true }}
-        style={{ background: "var(--color-bg-dark)" }}
-      />
+
+      {loading && !graphItems ? (
+        <div className="flex h-full items-center justify-center">
+          <IconLoader2 size={24} className="animate-spin text-text-tertiary" />
+        </div>
+      ) : nodes.length === 0 ? (
+        <div className="flex h-full items-center justify-center text-sm text-text-tertiary">
+          {isSearchMode ? "No results found" : "No connections found"}
+        </div>
+      ) : (
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onInit={(instance) => {
+            rfRef.current = instance;
+          }}
+          onNodeClick={handleNodeClick}
+          fitView
+          fitViewOptions={fitViewOptions}
+          panOnDrag
+          zoomOnScroll
+          zoomOnDoubleClick={false}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          proOptions={{ hideAttribution: true }}
+          style={{ background: "var(--color-bg-dark)" }}
+        />
+      )}
     </div>
   );
 }

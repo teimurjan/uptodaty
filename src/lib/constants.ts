@@ -1,5 +1,10 @@
 import type { NewsCategory } from "./types";
 
+export const GRAPH_NAME = "uptodaty";
+export const EMBEDDING_DIM = 1536;
+export const DEDUP_THRESHOLD = 0.85;
+export const RELATED_THRESHOLD = 0.8;
+
 export const CATEGORY_COLORS: Record<NewsCategory, string> = {
   LLMs: "#c8ff00",
   "Open Source": "#00d4ff",

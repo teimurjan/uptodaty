@@ -12,16 +12,24 @@ Next.js 16 (App Router), React 19, TypeScript (strict), Tailwind CSS v4, Biome, 
 - `bun run build` — production build
 - `bun run lint` — Biome check
 - `bun run format` — Biome format
+- `bun run db:seed-pipeline` — seed 3 days of data via full pipeline
+- `bun run db:backfill-embeddings` — backfill embeddings + cross-day relations for existing data
 
 ## Architecture
 
 ```
 src/
-  app/api/news/route.ts    server-side LLM API (Anthropic or OpenAI, auto-detected)
+  app/api/news/route.ts    full pipeline: fetch → dedup → LLM → embed → persist → cache
+  app/api/news/graph/      graph API: neighborhood traversal + semantic search
+  lib/graph.ts             FalkorDB graph + vector storage (embeddings, relations, KNN search)
+  lib/embeddings.ts        OpenAI text-embedding-3-small via AI SDK
   lib/model.ts             provider resolution based on available API key
   components/              one component per file, all typed
   hooks/                   data fetching, scroll tracking, keyboard nav
   lib/                     types, constants, pure utility functions
+scripts/
+  seed-pipeline.ts         full pipeline seed (3 days)
+  backfill-embeddings.ts   backfill embeddings + cross-day relations
 ```
 
 ## Conventions
@@ -45,7 +53,10 @@ Optional (enables daily Redis cache — app works without it):
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
-Optional (enables persistent graph storage + cross-day relations):
+Always required (used for embeddings — dedup + relation detection + search):
+- `OPENAI_API_KEY` — text-embedding-3-small
+
+Optional (enables persistent graph storage + cross-day relations + search):
 - `FALKORDB_HOST` (default: localhost)
 - `FALKORDB_PORT` (default: 6379)
 - `FALKORDB_USERNAME`

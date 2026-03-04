@@ -5,13 +5,13 @@ import type { NewsItem } from "@/lib/types";
 import { TreeView } from "./tree-view";
 
 interface TreeOverlayProps {
-  items: NewsItem[];
+  feedItems: NewsItem[];
   focusedItemId: string;
   onClose: () => void;
 }
 
 export function TreeOverlay({
-  items,
+  feedItems,
   focusedItemId,
   onClose,
 }: TreeOverlayProps) {
@@ -23,7 +23,11 @@ export function TreeOverlay({
       exit={{ y: "100%" }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
     >
-      <TreeView items={items} focusedItemId={focusedItemId} onClose={onClose} />
+      <TreeView
+        feedItems={feedItems}
+        focusedItemId={focusedItemId}
+        onClose={onClose}
+      />
     </motion.div>
   );
 }

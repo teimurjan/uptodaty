@@ -1,3 +1,4 @@
+import { computeEmbeddings, findDuplicateGroups } from "./embeddings";
 import type { RawArticle } from "./sources/types";
 
 function normalizeUrl(raw: string): string {
@@ -13,7 +14,7 @@ function normalizeUrl(raw: string): string {
   }
 }
 
-export function deduplicateArticles(articles: RawArticle[]): RawArticle[] {
+function deduplicateByUrl(articles: RawArticle[]): RawArticle[] {
   const byUrl = new Map<string, RawArticle>();
   const byTitle = new Map<string, RawArticle>();
   const result: RawArticle[] = [];
@@ -41,6 +42,27 @@ export function deduplicateArticles(articles: RawArticle[]): RawArticle[] {
   }
 
   return result;
+}
+
+export async function deduplicateArticles(
+  articles: RawArticle[],
+): Promise<RawArticle[]> {
+  const urlDeduped = deduplicateByUrl(articles);
+
+  if (urlDeduped.length <= 1) return urlDeduped;
+
+  const texts = urlDeduped.map(
+    (a) => `${a.title} ${a.body?.slice(0, 200) ?? ""}`,
+  );
+  const embeddings = await computeEmbeddings(texts);
+  const mergedInto = findDuplicateGroups(embeddings);
+
+  return urlDeduped.filter((article, index) => {
+    const canonicalIndex = mergedInto.get(index);
+    if (canonicalIndex === undefined) return true;
+    const canonical = urlDeduped[canonicalIndex];
+    return article.score > canonical.score;
+  });
 }
 
 export function formatPastHeadlines(headlines: string[]): string {

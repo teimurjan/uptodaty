@@ -1,11 +1,14 @@
 import { FalkorDB, type Graph } from "falkordb";
+import { EMBEDDING_DIM, GRAPH_NAME, RELATED_THRESHOLD } from "./constants";
 import type { NewsItem } from "./types";
-
-const GRAPH_NAME = "uptodaty";
 
 let db: FalkorDB | null = null;
 let graph: Graph | null = null;
 let migrated = false;
+
+export function vecLiteral(embedding: number[]): string {
+  return `vecf32([${embedding.join(",")}])`;
+}
 
 async function ensureIndexes(g: Graph): Promise<void> {
   if (migrated) return;
@@ -14,6 +17,7 @@ async function ensureIndexes(g: Graph): Promise<void> {
     "CREATE INDEX FOR (n:NewsItem) ON (n.id)",
     "CREATE INDEX FOR (n:NewsItem) ON (n.date)",
     "CREATE INDEX FOR (d:DailyIssue) ON (d.date)",
+    `CREATE VECTOR INDEX FOR (n:NewsItem) ON (n.embedding) OPTIONS {dimension:${EMBEDDING_DIM}, similarityFunction:'cosine'}`,
   ];
 
   for (const query of indexQueries) {
@@ -65,15 +69,76 @@ async function getGraph(): Promise<Graph | null> {
   }
 }
 
+export async function connectGraphDirect(): Promise<{
+  db: FalkorDB;
+  graph: Graph;
+}> {
+  const host = process.env.FALKORDB_HOST ?? "localhost";
+  const port = Number.parseInt(process.env.FALKORDB_PORT ?? "6379", 10);
+  const username = process.env.FALKORDB_USERNAME;
+  const password = process.env.FALKORDB_PASSWORD;
+  const isCloud = host.includes(".cloud");
+
+  const connection = await FalkorDB.connect({
+    socket: {
+      host,
+      port,
+      ...(isCloud ? { tls: true } : {}),
+    },
+    ...(username ? { username } : {}),
+    ...(password ? { password } : {}),
+  });
+
+  const g = connection.selectGraph(GRAPH_NAME);
+
+  const indexQueries = [
+    "CREATE INDEX FOR (n:NewsItem) ON (n.id)",
+    "CREATE INDEX FOR (n:NewsItem) ON (n.date)",
+    "CREATE INDEX FOR (d:DailyIssue) ON (d.date)",
+    `CREATE VECTOR INDEX FOR (n:NewsItem) ON (n.embedding) OPTIONS {dimension:${EMBEDDING_DIM}, similarityFunction:'cosine'}`,
+  ];
+  for (const query of indexQueries) {
+    try {
+      await g.query(query);
+    } catch {
+      // already exists
+    }
+  }
+
+  return { db: connection, graph: g };
+}
+
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export async function persistNewsItems(items: NewsItem[]): Promise<void> {
-  const g = await getGraph();
+function toNewsItem(
+  raw: Record<string, unknown>,
+  relatedIds: string[],
+): NewsItem {
+  const filtered = relatedIds.filter(Boolean);
+  return {
+    id: raw.id,
+    headline: raw.headline,
+    summary: raw.summary,
+    ...(raw.takeaway ? { takeaway: raw.takeaway } : {}),
+    category: raw.category,
+    ...(raw.source ? { source: raw.source } : {}),
+    ...(raw.url ? { url: raw.url } : {}),
+    ...(raw.date ? { date: raw.date } : {}),
+    ...(filtered.length > 0 ? { relatedTo: filtered } : {}),
+  } as NewsItem;
+}
+
+export async function persistNewsItems(
+  items: NewsItem[],
+  embeddings?: number[][],
+  options?: { graph: Graph; date: string },
+): Promise<void> {
+  const g = options?.graph ?? (await getGraph());
   if (!g) return;
 
-  const date = todayDate();
+  const date = options?.date ?? todayDate();
 
   await g.query(
     `
@@ -108,6 +173,17 @@ export async function persistNewsItems(items: NewsItem[]): Promise<void> {
     },
   );
 
+  if (embeddings) {
+    for (let i = 0; i < items.length; i++) {
+      const emb = embeddings[i];
+      if (!emb) continue;
+      await g.query(
+        `MATCH (n:NewsItem {id: $id}) SET n.embedding = ${vecLiteral(emb)}`,
+        { params: { id: items[i].id } },
+      );
+    }
+  }
+
   const pairs: Array<{ fromId: string; toId: string }> = [];
   for (const item of items) {
     if (item.relatedTo) {
@@ -130,8 +206,11 @@ export async function persistNewsItems(items: NewsItem[]): Promise<void> {
   }
 }
 
-export async function getRecentHeadlinesFromGraph(days = 7): Promise<string[]> {
-  const g = await getGraph();
+export async function getRecentHeadlinesFromGraph(
+  days = 7,
+  graphOverride?: Graph,
+): Promise<string[]> {
+  const g = graphOverride ?? (await getGraph());
   if (!g) return [];
 
   const cutoff = new Date();
@@ -175,21 +254,121 @@ export async function getRelatedGraph(
     { params: { itemId } },
   );
 
-  return (result.data ?? []).map((r) => {
-    const raw = r.item;
-    const relatedIds = (r.relatedIds as string[]).filter(Boolean);
-    return {
-      id: raw.id,
-      headline: raw.headline,
-      summary: raw.summary,
-      ...(raw.takeaway ? { takeaway: raw.takeaway } : {}),
-      category: raw.category,
-      ...(raw.source ? { source: raw.source } : {}),
-      ...(raw.url ? { url: raw.url } : {}),
-      ...(raw.date ? { date: raw.date } : {}),
-      ...(relatedIds.length > 0 ? { relatedTo: relatedIds } : {}),
-    } as NewsItem;
-  });
+  return (result.data ?? []).map((r) =>
+    toNewsItem(r.item, r.relatedIds as string[]),
+  );
+}
+
+export async function createCrossDayRelations(
+  items: NewsItem[],
+  embeddings: number[][],
+  graphOverride?: Graph,
+): Promise<number> {
+  const g = graphOverride ?? (await getGraph());
+  if (!g) return 0;
+
+  let edgesCreated = 0;
+  const itemIds = new Set(items.map((item) => item.id));
+
+  for (let i = 0; i < items.length; i++) {
+    const emb = embeddings[i];
+    if (!emb) continue;
+
+    const result = await g.roQuery<{
+      node: Record<string, unknown>;
+      score: number;
+    }>(
+      `CALL db.idx.vector.queryNodes('NewsItem', 'embedding', 20, ${vecLiteral(emb)}) YIELD node, score RETURN node.id AS id, score`,
+    );
+
+    const neighbors = (result.data ?? []).filter(
+      (r) =>
+        (r as unknown as { id: string }).id !== items[i].id &&
+        !itemIds.has((r as unknown as { id: string }).id) &&
+        r.score >= RELATED_THRESHOLD,
+    );
+
+    for (const neighbor of neighbors) {
+      const neighborId = (neighbor as unknown as { id: string }).id;
+      await g.query(
+        `
+        MATCH (a:NewsItem {id: $fromId})
+        MATCH (b:NewsItem {id: $toId})
+        MERGE (a)-[:RELATED_TO]->(b)
+        MERGE (b)-[:RELATED_TO]->(a)
+        `,
+        { params: { fromId: items[i].id, toId: neighborId } },
+      );
+      edgesCreated++;
+    }
+  }
+
+  return edgesCreated;
+}
+
+export async function searchItems(query: string, k = 20): Promise<NewsItem[]> {
+  const g = await getGraph();
+  if (!g) return [];
+
+  const result = await g.roQuery<{
+    id: string;
+    headline: string;
+    summary: string;
+    takeaway: string | null;
+    category: string;
+    source: string | null;
+    url: string | null;
+    date: string | null;
+  }>(
+    `
+    MATCH (n:NewsItem)
+    WHERE toLower(n.headline) CONTAINS toLower($query)
+       OR toLower(n.summary) CONTAINS toLower($query)
+    RETURN n.id AS id, n.headline AS headline, n.summary AS summary,
+           n.takeaway AS takeaway, n.category AS category,
+           n.source AS source, n.url AS url, n.date AS date
+    ORDER BY n.date DESC
+    LIMIT ${k}
+    `,
+    { params: { query } },
+  );
+
+  const items = (result.data ?? []).map(
+    (r) =>
+      ({
+        id: r.id,
+        headline: r.headline,
+        summary: r.summary,
+        ...(r.takeaway ? { takeaway: r.takeaway } : {}),
+        category: r.category,
+        ...(r.source ? { source: r.source } : {}),
+        ...(r.url ? { url: r.url } : {}),
+        ...(r.date ? { date: r.date } : {}),
+      }) as NewsItem,
+  );
+
+  if (items.length < 2) return items;
+
+  const ids = items.map((item) => item.id);
+  const edgeResult = await g.roQuery<{ fromId: string; toId: string }>(
+    `
+    UNWIND $ids AS sourceId
+    MATCH (a:NewsItem {id: sourceId})-[:RELATED_TO]->(b:NewsItem)
+    WHERE b.id IN $ids
+    RETURN a.id AS fromId, b.id AS toId
+    `,
+    { params: { ids } },
+  );
+
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+  for (const edge of edgeResult.data ?? []) {
+    const from = itemMap.get(edge.fromId);
+    if (!from) continue;
+    if (!from.relatedTo) from.relatedTo = [];
+    if (!from.relatedTo.includes(edge.toId)) from.relatedTo.push(edge.toId);
+  }
+
+  return items;
 }
 
 export async function getItemsByDate(date: string): Promise<NewsItem[]> {
@@ -212,18 +391,7 @@ export async function getItemsByDate(date: string): Promise<NewsItem[]> {
     { params: { date } },
   );
 
-  return (result.data ?? []).map((r) => {
-    const raw = r.item;
-    const relatedIds = (r.relatedIds as string[]).filter(Boolean);
-    return {
-      id: raw.id,
-      headline: raw.headline,
-      summary: raw.summary,
-      ...(raw.takeaway ? { takeaway: raw.takeaway } : {}),
-      category: raw.category,
-      ...(raw.source ? { source: raw.source } : {}),
-      ...(raw.url ? { url: raw.url } : {}),
-      ...(relatedIds.length > 0 ? { relatedTo: relatedIds } : {}),
-    } as NewsItem;
-  });
+  return (result.data ?? []).map((r) =>
+    toNewsItem(r.item, r.relatedIds as string[]),
+  );
 }

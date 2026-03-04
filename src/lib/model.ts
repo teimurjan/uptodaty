@@ -15,3 +15,13 @@ export function resolveModel(): LanguageModel {
     "No API key configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env.local",
   );
 }
+
+export function resolveEmbeddingModel() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error(
+      "OPENAI_API_KEY is required for embeddings (text-embedding-3-small)",
+    );
+  }
+
+  return openai.embedding("text-embedding-3-small");
+}
