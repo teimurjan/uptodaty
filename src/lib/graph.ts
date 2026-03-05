@@ -53,7 +53,16 @@ function createConnection(): FalkorDB | null {
 }
 
 async function getGraph(): Promise<Graph | null> {
-  if (graph) return graph;
+  if (graph) {
+    try {
+      await graph.roQuery("RETURN 1");
+      return graph;
+    } catch {
+      db = null;
+      graph = null;
+      migrated = false;
+    }
+  }
 
   const connection = createConnection();
   if (!connection) return null;
@@ -65,6 +74,8 @@ async function getGraph(): Promise<Graph | null> {
     return graph;
   } catch (err) {
     console.error("[graph] Connection failed:", err);
+    db = null;
+    graph = null;
     return null;
   }
 }
