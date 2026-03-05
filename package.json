@@ -9,7 +9,8 @@
     "lint": "biome check",
     "format": "biome format --write",
     "db:seed": "bun scripts/seed.ts",
-    "db:seed-pipeline": "bun scripts/seed-pipeline.ts",
+    "db:clear": "bun scripts/clear.ts",
+    "cache:clear": "bun scripts/clear-cache.ts",
     "db:backfill-embeddings": "bun scripts/backfill-embeddings.ts"
   },
   "dependencies": {
@@ -17,14 +18,14 @@
     "@ai-sdk/openai": "^3.0.39",
     "@dagrejs/dagre": "^2.0.4",
     "@tabler/icons-react": "^3.38.0",
-    "@upstash/redis": "^1.36.3",
     "@xyflow/react": "^12.10.1",
     "ai": "^6.0.108",
     "falkordb": "^6.6.2",
     "framer-motion": "^12.34.4",
     "next": "16.1.6",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "swr": "^2.4.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.2.0",

@@ -9,7 +9,7 @@ export function ErrorScreen({ message, onRetry }: ErrorScreenProps) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-bg-dark p-8 font-mono">
       <IconAlertCircle className="mb-4" size={40} />
-      <div className="mb-2 text-center text-[15px] text-text-primary">
+      <div className="mb-2 text-center text-base text-text-primary">
         Failed to load today&apos;s briefing
       </div>
       <div className="mb-8 max-w-[400px] text-center text-xs text-text-secondary">

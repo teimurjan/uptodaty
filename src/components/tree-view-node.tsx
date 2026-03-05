@@ -37,20 +37,22 @@ export function TreeViewNode({ data }: NodeProps) {
         {headline}
       </p>
       {date && (
-        <span className="inline-block font-mono text-[9px] tracking-wide text-text-secondary text-right">
+        <span className="inline-block font-mono text-[10px] tracking-wide text-text-secondary text-right">
           {formatDate(date)}
         </span>
       )}
-      <p className="border-t border-border pt-2 font-body text-[10px] leading-relaxed text-text-secondary">
+      <p className="line-clamp-5 border-t border-border pt-2 font-body text-[10px] leading-relaxed text-text-secondary">
         {summary}
       </p>
       {url && (
-        <span
-          data-source-link
-          className="mt-1.5 inline-flex cursor-pointer items-center gap-1 border-b font-mono text-[9px] text-text-secondary"
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1.5 inline-flex cursor-pointer items-center gap-1 border-b font-mono text-[10px] text-text-secondary"
         >
           Source <IconExternalLink size={10} />
-        </span>
+        </a>
       )}
       <Handle type="source" position={Position.Bottom} className="!bg-border" />
     </div>

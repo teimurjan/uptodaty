@@ -1,7 +1,15 @@
 {
   "crons": [
     {
-      "path": "/api/cron/news",
+      "path": "/api/cron/news?vertical=ai",
+      "schedule": "50 11 * * *"
+    },
+    {
+      "path": "/api/cron/news?vertical=software-engineering",
+      "schedule": "50 11 * * *"
+    },
+    {
+      "path": "/api/cron/news?vertical=web3",
       "schedule": "50 11 * * *"
     }
   ]

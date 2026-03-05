@@ -1,11 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { NewsFeed } from "@/components/news-feed";
 import { TreeOverlay } from "@/components/tree-overlay";
 import { TreeView } from "@/components/tree-view";
+import { prefetchNeighborhood } from "@/hooks/use-graph-neighborhood";
 import { useNewsFeed } from "@/hooks/use-news-feed";
+import { DEFAULT_VERTICAL_ID, type VerticalId } from "@/lib/verticals";
 
 const springTransition = {
   type: "spring",
@@ -14,15 +16,26 @@ const springTransition = {
 } as const;
 
 export default function Home() {
-  const feedState = useNewsFeed();
+  const [verticalId, setVerticalId] = useState<VerticalId>(DEFAULT_VERTICAL_ID);
+  const feedState = useNewsFeed(verticalId);
   const [treeItem, setTreeItem] = useState<string | null>(null);
   const treeOpen = treeItem !== null;
+  const currentIndexRef = useRef(0);
 
   const handleCurrentItemChange = useCallback(
-    (itemId: string | null) => {
+    (itemId: string | null, index?: number) => {
       if (treeOpen && itemId) setTreeItem(itemId);
+
+      if (index !== undefined) {
+        currentIndexRef.current = index;
+        const { news } = feedState;
+        for (const offset of [-1, 0, 1]) {
+          const neighbor = news[index + offset];
+          if (neighbor) prefetchNeighborhood(neighbor.id);
+        }
+      }
     },
-    [treeOpen],
+    [treeOpen, feedState],
   );
 
   return (
@@ -36,6 +49,8 @@ export default function Home() {
           {...feedState}
           onOpenTree={setTreeItem}
           onCurrentItemChange={handleCurrentItemChange}
+          selectedVertical={verticalId}
+          onSelectVertical={setVerticalId}
         />
       </motion.div>
 

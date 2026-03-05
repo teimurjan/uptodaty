@@ -1,3 +1,5 @@
+import type { VerticalId } from "@/lib/verticals";
+
 export interface RawArticle {
   title: string;
   url: string | null;
@@ -8,6 +10,7 @@ export interface RawArticle {
   body: string | null;
   sourceName: string;
   sourceUrl: string;
+  vertical?: VerticalId;
 }
 
 export interface SourceResult {

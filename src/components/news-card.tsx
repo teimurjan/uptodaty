@@ -77,7 +77,7 @@ export function NewsCard({
 
         {item.takeaway && <TakeawayBlock text={item.takeaway} color={color} />}
 
-        <div className="flex items-center gap-4 font-mono text-[11px] text-text-secondary">
+        <div className="flex items-center gap-4 font-mono text-xs text-text-secondary">
           {item.source && (
             <span className="flex items-center gap-1.5">
               <span style={{ color }}>●</span>
@@ -100,10 +100,10 @@ export function NewsCard({
           <button
             type="button"
             onClick={() => onOpenTree(item.id)}
-            className="ml-auto font-mono text-[10px] tracking-wide transition-colors hover:brightness-125"
+            className="ml-auto font-mono text-xs tracking-wide transition-colors hover:brightness-125 underline cursor-pointer"
             style={{ color }}
           >
-            Connections
+            View Related
           </button>
         </div>
       </motion.div>

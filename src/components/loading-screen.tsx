@@ -34,7 +34,7 @@ export function LoadingScreen({ progress }: LoadingScreenProps) {
           style={{ width: `${progress}%` }}
         />
       </div>
-      <div className="mt-4 text-[11px] tracking-[2px] text-text-secondary">
+      <div className="mt-4 text-xs tracking-[2px] text-text-secondary">
         {getProgressMessage(progress)}
       </div>
     </div>

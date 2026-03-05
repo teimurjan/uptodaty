@@ -103,7 +103,7 @@ async function main() {
       );
 
       const neighbors = (similarResult.data ?? []).filter(
-        (r) => r.id !== nodeId && r.score >= RELATED_THRESHOLD,
+        (r) => r.id !== nodeId && r.score <= RELATED_THRESHOLD,
       );
 
       for (const neighbor of neighbors) {

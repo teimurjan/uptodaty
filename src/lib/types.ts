@@ -9,7 +9,16 @@ export type NewsCategory =
   | "Robotics"
   | "Vision"
   | "GitHub Trending"
-  | "General";
+  | "General"
+  | "Languages"
+  | "Tooling"
+  | "Architecture"
+  | "DevOps"
+  | "Security"
+  | "Protocols"
+  | "DeFi"
+  | "Infrastructure"
+  | "NFTs";
 
 export interface NewsItem {
   id: string;
@@ -20,5 +29,6 @@ export interface NewsItem {
   source?: string;
   url?: string;
   date?: string;
+  vertical?: string;
   relatedTo?: string[];
 }

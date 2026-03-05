@@ -1,33 +1,25 @@
 import { generateText } from "ai";
 import { getRecentHeadlines, setCachedNews } from "./cache";
+import { categorizeArticles } from "./categorize";
 import { deduplicateArticles } from "./dedup";
-import { computeEmbeddings, detectRelations } from "./embeddings";
-import { createCrossDayRelations, persistNewsItems } from "./graph";
+import { computeEmbeddings } from "./embeddings";
+import { createRelations, persistNewsItems } from "./graph";
 import { resolveModel } from "./model";
 import { parseNewsJson } from "./parse-news";
 import { buildNewsPrompt } from "./prompt";
-import { formatSourceDigest } from "./sources/format";
-import { collectArticles, fetchAllSources } from "./sources/registry";
+import { formatArticlesDigest } from "./sources/format";
+import { fetchAllSourcesGlobal } from "./sources/registry";
 import type { NewsItem } from "./types";
+import { getVertical, type VerticalId } from "./verticals";
 
-function linkRelatedItems(items: NewsItem[], pairs: Array<[number, number]>) {
-  for (const [i, j] of pairs) {
-    const a = items[i];
-    const b = items[j];
-    if (!a.relatedTo) a.relatedTo = [];
-    if (!b.relatedTo) b.relatedTo = [];
-    if (!a.relatedTo.includes(b.id)) a.relatedTo.push(b.id);
-    if (!b.relatedTo.includes(a.id)) b.relatedTo.push(a.id);
-  }
-}
+export async function runNewsPipeline(
+  verticalId: VerticalId = "ai",
+): Promise<NewsItem[]> {
+  const vertical = getVertical(verticalId);
 
-export async function runNewsPipeline(): Promise<NewsItem[]> {
-  const [results, pastHeadlines] = await Promise.all([
-    fetchAllSources(),
-    getRecentHeadlines(7),
-  ]);
-
-  const allArticles = collectArticles(results);
+  const [{ results, articles: allArticles }, pastHeadlines] = await Promise.all(
+    [fetchAllSourcesGlobal(verticalId), getRecentHeadlines(verticalId, 7)],
+  );
 
   if (allArticles.length === 0) {
     const errors = results
@@ -39,33 +31,37 @@ export async function runNewsPipeline(): Promise<NewsItem[]> {
 
   const dedupedArticles = await deduplicateArticles(allArticles);
 
-  const dedupedBySource = results.map((result) => ({
-    ...result,
-    articles: result.articles.filter((a) => dedupedArticles.includes(a)),
-  }));
+  const verticalArticles = await categorizeArticles(
+    dedupedArticles,
+    verticalId,
+  );
 
-  const digest = formatSourceDigest(dedupedBySource);
+  if (verticalArticles.length === 0) {
+    throw new Error(
+      `No articles matched vertical "${verticalId}" after categorization`,
+    );
+  }
+
+  const digest = formatArticlesDigest(verticalArticles);
   const model = resolveModel();
 
   const { text } = await generateText({
     model,
-    prompt: buildNewsPrompt(digest, pastHeadlines),
+    prompt: buildNewsPrompt(digest, vertical.prompt, pastHeadlines),
   });
 
   const items = parseNewsJson(text);
 
-  const texts = items.map((item) => `${item.headline} ${item.summary}`);
-  const embeddings = await computeEmbeddings(texts);
-  const relatedPairs = detectRelations(embeddings);
-  linkRelatedItems(items, relatedPairs);
-
-  await persistNewsItems(items, embeddings);
-  const crossDayEdges = await createCrossDayRelations(items, embeddings);
-  if (crossDayEdges > 0) {
-    console.log(`[pipeline] Created ${crossDayEdges} cross-day relations`);
+  for (const item of items) {
+    item.vertical = verticalId;
   }
 
-  await setCachedNews(items);
+  const texts = items.map((item) => `${item.headline} ${item.summary}`);
+  const embeddings = await computeEmbeddings(texts);
+
+  await persistNewsItems(items, embeddings, { vertical: verticalId });
+  await createRelations(items, embeddings);
+  await setCachedNews(items, verticalId);
 
   return items;
 }

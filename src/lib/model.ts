@@ -16,6 +16,16 @@ export function resolveModel(): LanguageModel {
   );
 }
 
+export function resolveCategorizationModel(): LanguageModel {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error(
+      "OPENAI_API_KEY is required for article categorization (gpt-4.1-mini)",
+    );
+  }
+
+  return openai("gpt-4.1-mini");
+}
+
 export function resolveEmbeddingModel() {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error(

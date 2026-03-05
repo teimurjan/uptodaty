@@ -35,16 +35,5 @@ export function parseNewsJson(text: string): NewsItem[] {
     ids.add(items[i].id);
   }
 
-  for (const item of items) {
-    if (item.relatedTo) {
-      item.relatedTo = item.relatedTo.filter(
-        (ref) => ids.has(ref) && ref !== item.id,
-      );
-      if (item.relatedTo.length === 0) {
-        delete item.relatedTo;
-      }
-    }
-  }
-
   return items;
 }

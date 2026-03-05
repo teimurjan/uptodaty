@@ -14,15 +14,6 @@ interface GitHubSearchResponse {
   items: GitHubRepo[];
 }
 
-const AI_TOPICS = [
-  "machine-learning",
-  "large-language-models",
-  "artificial-intelligence",
-  "deep-learning",
-  "llm",
-  "generative-ai",
-];
-
 function weekAgo(): string {
   const date = new Date();
   date.setDate(date.getDate() - 7);
@@ -64,10 +55,13 @@ function deduplicateRepos(repos: GitHubRepo[]): GitHubRepo[] {
   );
 }
 
-async function searchRepos(limit: number): Promise<GitHubRepo[]> {
-  const perTopic = Math.ceil(limit / AI_TOPICS.length) + 2;
+async function searchRepos(
+  topics: string[],
+  limit: number,
+): Promise<GitHubRepo[]> {
+  const perTopic = Math.ceil(limit / topics.length) + 2;
   const results = await Promise.all(
-    AI_TOPICS.map((topic) => fetchTopicRepos(topic, perTopic)),
+    topics.map((topic) => fetchTopicRepos(topic, perTopic)),
   );
   return deduplicateRepos(results.flat()).slice(0, limit);
 }
@@ -86,11 +80,11 @@ function toRawArticle(repo: GitHubRepo): RawArticle {
   };
 }
 
-export function createGitHubSource(): Source {
+export function createGitHubSource(topics: string[]): Source {
   return {
     name: "GitHub Trending",
     async fetch(limit) {
-      const repos = await searchRepos(limit);
+      const repos = await searchRepos(topics, limit);
       return {
         sourceName: "GitHub Trending",
         articles: repos.map(toRawArticle),

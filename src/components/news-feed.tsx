@@ -5,6 +5,7 @@ import { useKeyboardNav } from "@/hooks/use-keyboard-nav";
 import { useScrollTracker } from "@/hooks/use-scroll-tracker";
 import { useWheelNav } from "@/hooks/use-wheel-nav";
 import type { NewsItem } from "@/lib/types";
+import type { VerticalId } from "@/lib/verticals";
 import { EndCard } from "./end-card";
 import { ErrorScreen } from "./error-screen";
 import { LoadingScreen } from "./loading-screen";
@@ -19,7 +20,9 @@ interface NewsFeedProps {
   error: string | null;
   refresh: () => void;
   onOpenTree: (itemId: string) => void;
-  onCurrentItemChange?: (itemId: string | null) => void;
+  onCurrentItemChange?: (itemId: string | null, index?: number) => void;
+  selectedVertical: VerticalId;
+  onSelectVertical: (id: VerticalId) => void;
 }
 
 export function NewsFeed({
@@ -30,6 +33,8 @@ export function NewsFeed({
   refresh,
   onOpenTree,
   onCurrentItemChange,
+  selectedVertical,
+  onSelectVertical,
 }: NewsFeedProps) {
   const totalCards = news.length + 1;
   const { containerRef, currentIndex } = useScrollTracker(totalCards);
@@ -38,7 +43,7 @@ export function NewsFeed({
 
   useEffect(() => {
     const item = currentIndex < news.length ? news[currentIndex] : null;
-    onCurrentItemChange?.(item?.id ?? null);
+    onCurrentItemChange?.(item?.id ?? null, currentIndex);
   }, [currentIndex, news, onCurrentItemChange]);
 
   return (
@@ -52,6 +57,8 @@ export function NewsFeed({
           <TopBar
             currentIndex={Math.min(currentIndex, news.length - 1)}
             totalItems={news.length}
+            selectedVertical={selectedVertical}
+            onSelectVertical={onSelectVertical}
           />
 
           <div
@@ -59,7 +66,7 @@ export function NewsFeed({
             className="scrollbar-none h-full snap-y snap-mandatory overflow-y-scroll scroll-smooth"
           >
             {news.map((item, i) => (
-              <div key={item.headline} data-card={i} className="h-full">
+              <div key={item.id} data-card={i} className="h-full">
                 <NewsCard
                   item={item}
                   index={i}

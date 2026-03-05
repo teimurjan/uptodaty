@@ -68,6 +68,7 @@ export function createHackerNewsSource(): Source {
       const items = await fetchItemsBatched(ids.slice(0, limit));
       const articles = items
         .filter((item) => item.type === "story")
+        .slice(0, limit)
         .map(toRawArticle);
 
       return {

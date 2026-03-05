@@ -43,10 +43,10 @@ export function EndCard({ itemCount, scrollContainerRef }: EndCardProps) {
         style={{ opacity, y, scale }}
       >
         <IconCheck className="mb-4" size={40} />
-        <div className="mb-2 text-[22px] font-bold text-text-primary">
+        <div className="mb-2 text-base font-bold text-text-primary">
           You&apos;re up to date
         </div>
-        <div className="font-body text-[13px] text-text-secondary">
+        <div className="font-body text-sm text-text-secondary">
           {itemCount} signals processed · {dateLabel}
         </div>
       </motion.div>

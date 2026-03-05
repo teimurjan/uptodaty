@@ -23,6 +23,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useGraphNeighborhood } from "@/hooks/use-graph-neighborhood";
 import type { NewsItem } from "@/lib/types";
 import { TreeViewNode } from "./tree-view-node";
 import "@xyflow/react/dist/style.css";
@@ -174,36 +175,11 @@ interface TreeViewProps {
 
 export function TreeView({ feedItems, focusedItemId, onClose }: TreeViewProps) {
   const rfRef = useRef<ReactFlowInstance | null>(null);
-  const [graphItems, setGraphItems] = useState<NewsItem[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const { items: graphItems, loading } = useGraphNeighborhood(focusedItemId);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<NewsItem[] | null>(null);
   const [searching, setSearching] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-
-    fetch(
-      `/api/news/graph?mode=neighborhood&id=${encodeURIComponent(focusedItemId)}&depth=2`,
-    )
-      .then((res) => res.json())
-      .then((data) => {
-        if (cancelled) return;
-        if (data.items?.length > 0) {
-          setGraphItems(data.items);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [focusedItemId]);
 
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -231,7 +207,8 @@ export function TreeView({ feedItems, focusedItemId, onClose }: TreeViewProps) {
     };
   }, [searchQuery]);
 
-  const activeItems = searchResults ?? graphItems ?? feedItems;
+  const activeItems =
+    searchResults ?? (graphItems.length > 0 ? graphItems : feedItems);
   const isSearchMode = searchResults !== null;
 
   const { nodes, edges } = useMemo(
@@ -243,7 +220,10 @@ export function TreeView({ feedItems, focusedItemId, onClose }: TreeViewProps) {
   );
 
   const fitViewOptions = useMemo(
-    () => ({ padding: 0.3, maxZoom: nodes.length <= 2 ? 0.85 : 0.65 }),
+    () => ({
+      padding: 0.3,
+      maxZoom: nodes.length <= 1 ? 1.5 : nodes.length <= 3 ? 1.25 : 0.8,
+    }),
     [nodes.length],
   );
 
@@ -258,7 +238,7 @@ export function TreeView({ feedItems, focusedItemId, onClose }: TreeViewProps) {
 
   const handleNodeClick = useCallback((event: MouseEvent, node: Node) => {
     const target = event.target as HTMLElement;
-    if (!target.closest("[data-source-link]")) return;
+    if (!target.closest("a[href^='http']")) return;
     const url = node.data.url as string | undefined;
     if (url) window.open(url, "_blank", "noopener,noreferrer");
   }, []);
@@ -312,7 +292,7 @@ export function TreeView({ feedItems, focusedItemId, onClose }: TreeViewProps) {
         </button>
       </div>
 
-      {loading && !graphItems ? (
+      {loading && graphItems.length === 0 ? (
         <div className="flex h-full items-center justify-center">
           <IconLoader2 size={24} className="animate-spin text-text-tertiary" />
         </div>

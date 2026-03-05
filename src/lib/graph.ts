@@ -133,12 +133,21 @@ function toNewsItem(
 export async function persistNewsItems(
   items: NewsItem[],
   embeddings?: number[][],
-  options?: { graph: Graph; date: string },
+  options?: { graph?: Graph; date?: string; vertical?: string },
 ): Promise<void> {
   const g = options?.graph ?? (await getGraph());
   if (!g) return;
 
   const date = options?.date ?? todayDate();
+  const vertical = options?.vertical ?? "ai";
+
+  await g.query(
+    `
+    MATCH (old:NewsItem {date: $date, vertical: $vertical})
+    DETACH DELETE old
+    `,
+    { params: { date, vertical } },
+  );
 
   await g.query(
     `
@@ -154,12 +163,14 @@ export async function persistNewsItems(
       n.category  = item.category,
       n.source    = item.source,
       n.url       = item.url,
-      n.date      = $date
+      n.date      = $date,
+      n.vertical  = $vertical
     MERGE (n)-[:PUBLISHED_IN]->(issue)
     `,
     {
       params: {
         date,
+        vertical,
         items: items.map((item) => ({
           id: item.id,
           headline: item.headline,
@@ -208,6 +219,7 @@ export async function persistNewsItems(
 
 export async function getRecentHeadlinesFromGraph(
   days = 7,
+  verticalId?: string,
   graphOverride?: Graph,
 ): Promise<string[]> {
   const g = graphOverride ?? (await getGraph());
@@ -217,13 +229,15 @@ export async function getRecentHeadlinesFromGraph(
   cutoff.setDate(cutoff.getDate() - days);
   const cutoffDate = cutoff.toISOString().slice(0, 10);
 
+  const verticalFilter = verticalId ? " AND n.vertical = $vertical" : "";
+
   const result = await g.roQuery<{ headline: string }>(
     `
     MATCH (n:NewsItem)
-    WHERE n.date >= $cutoffDate AND n.date < $today
+    WHERE n.date >= $cutoffDate AND n.date < $today${verticalFilter}
     RETURN n.headline AS headline
     `,
-    { params: { cutoffDate, today: todayDate() } },
+    { params: { cutoffDate, today: todayDate(), vertical: verticalId ?? "" } },
   );
 
   return (result.data ?? []).map((r) => r.headline);
@@ -259,7 +273,7 @@ export async function getRelatedGraph(
   );
 }
 
-export async function createCrossDayRelations(
+export async function createRelations(
   items: NewsItem[],
   embeddings: number[][],
   graphOverride?: Graph,
@@ -268,28 +282,28 @@ export async function createCrossDayRelations(
   if (!g) return 0;
 
   let edgesCreated = 0;
-  const itemIds = new Set(items.map((item) => item.id));
 
   for (let i = 0; i < items.length; i++) {
     const emb = embeddings[i];
     if (!emb) continue;
 
     const result = await g.roQuery<{
-      node: Record<string, unknown>;
+      id: string;
+      vertical: string;
       score: number;
     }>(
-      `CALL db.idx.vector.queryNodes('NewsItem', 'embedding', 20, ${vecLiteral(emb)}) YIELD node, score RETURN node.id AS id, score`,
+      `CALL db.idx.vector.queryNodes('NewsItem', 'embedding', 20, ${vecLiteral(emb)}) YIELD node, score RETURN node.id AS id, node.vertical AS vertical, score`,
     );
 
+    const itemVertical = items[i].vertical ?? "ai";
     const neighbors = (result.data ?? []).filter(
       (r) =>
-        (r as unknown as { id: string }).id !== items[i].id &&
-        !itemIds.has((r as unknown as { id: string }).id) &&
-        r.score >= RELATED_THRESHOLD,
+        r.id !== items[i].id &&
+        r.vertical === itemVertical &&
+        r.score <= RELATED_THRESHOLD,
     );
 
     for (const neighbor of neighbors) {
-      const neighborId = (neighbor as unknown as { id: string }).id;
       await g.query(
         `
         MATCH (a:NewsItem {id: $fromId})
@@ -297,7 +311,7 @@ export async function createCrossDayRelations(
         MERGE (a)-[:RELATED_TO]->(b)
         MERGE (b)-[:RELATED_TO]->(a)
         `,
-        { params: { fromId: items[i].id, toId: neighborId } },
+        { params: { fromId: items[i].id, toId: neighbor.id } },
       );
       edgesCreated++;
     }
@@ -371,16 +385,22 @@ export async function searchItems(query: string, k = 20): Promise<NewsItem[]> {
   return items;
 }
 
-export async function getItemsByDate(date: string): Promise<NewsItem[]> {
+export async function getItemsByDate(
+  date: string,
+  verticalId?: string,
+): Promise<NewsItem[]> {
   const g = await getGraph();
   if (!g) return [];
+
+  const verticalFilter = verticalId ? " AND n.vertical = $vertical" : "";
 
   const result = await g.roQuery<{
     item: Record<string, unknown>;
     relatedIds: string[];
   }>(
     `
-    MATCH (n:NewsItem {date: $date})
+    MATCH (n:NewsItem)
+    WHERE n.date = $date${verticalFilter}
     OPTIONAL MATCH (n)-[:RELATED_TO]->(related:NewsItem)
     RETURN n {
       .id, .headline, .summary, .takeaway,
@@ -388,7 +408,7 @@ export async function getItemsByDate(date: string): Promise<NewsItem[]> {
     } AS item,
     collect(DISTINCT related.id) AS relatedIds
     `,
-    { params: { date } },
+    { params: { date, vertical: verticalId ?? "" } },
   );
 
   return (result.data ?? []).map((r) =>

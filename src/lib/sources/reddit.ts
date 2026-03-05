@@ -1,7 +1,5 @@
 import type { RawArticle, Source } from "./types";
 
-const SUBREDDITS = ["MachineLearning", "LocalLLaMA", "artificial"];
-
 interface RedditPost {
   data: {
     title: string;
@@ -52,15 +50,15 @@ async function fetchSubreddit(
   }));
 }
 
-export function createRedditSource(): Source {
+export function createRedditSource(subreddits: string[]): Source {
   return {
     name: "Reddit",
     async fetch(limit) {
-      const perSubreddit = Math.ceil(limit / SUBREDDITS.length);
+      const perSubreddit = Math.ceil(limit / subreddits.length);
       const articles: RawArticle[] = [];
       const errors: string[] = [];
 
-      for (const subreddit of SUBREDDITS) {
+      for (const subreddit of subreddits) {
         try {
           const posts = await fetchSubreddit(subreddit, perSubreddit);
           articles.push(...posts);

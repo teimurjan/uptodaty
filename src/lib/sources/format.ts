@@ -1,4 +1,4 @@
-import type { RawArticle, SourceResult } from "./types";
+import type { RawArticle } from "./types";
 
 function timeSince(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
@@ -35,24 +35,21 @@ function formatArticle(article: RawArticle, index: number): string {
   return parts.join("\n");
 }
 
-export function formatSourceDigest(results: SourceResult[]): string {
+export function formatArticlesDigest(articles: RawArticle[]): string {
+  const bySource = new Map<string, RawArticle[]>();
+  for (const article of articles) {
+    const existing = bySource.get(article.sourceName) ?? [];
+    existing.push(article);
+    bySource.set(article.sourceName, existing);
+  }
+
   const sections: string[] = [];
-
-  for (const result of results) {
-    if (result.error && result.articles.length === 0) {
-      sections.push(`## ${result.sourceName}\n[Error: ${result.error}]`);
-      continue;
-    }
-
-    const sorted = [...result.articles].sort((a, b) => b.score - a.score);
+  for (const [sourceName, sourceArticles] of bySource) {
+    const sorted = [...sourceArticles].sort((a, b) => b.score - a.score);
     const formatted = sorted.map((article, i) => formatArticle(article, i + 1));
-
-    let header = `## ${result.sourceName} (${sorted.length} articles)`;
-    if (result.error) {
-      header += ` [partial — ${result.error}]`;
-    }
-
-    sections.push(`${header}\n${formatted.join("\n\n")}`);
+    sections.push(
+      `## ${sourceName} (${sorted.length} articles)\n${formatted.join("\n\n")}`,
+    );
   }
 
   return sections.join("\n\n---\n\n");

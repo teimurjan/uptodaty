@@ -1,27 +1,32 @@
+import { VERTICALS, type VerticalId } from "@/lib/verticals";
 import { createGitHubSource } from "./github";
 import { createHackerNewsSource } from "./hackernews";
 import { createRedditSource } from "./reddit";
-import type { RawArticle, Source, SourceResult } from "./types";
+import type { RawArticle, SourceResult } from "./types";
 
-const DEFAULT_SOURCES: Source[] = [
-  createHackerNewsSource(),
-  createRedditSource(),
-  createGitHubSource(),
-];
+export async function fetchAllSourcesGlobal(
+  verticalId: VerticalId,
+  hnLimit = 10,
+): Promise<{ results: SourceResult[]; articles: RawArticle[] }> {
+  const vertical = VERTICALS[verticalId];
 
-export async function fetchAllSources(
-  sources: Source[] = DEFAULT_SOURCES,
-  limitPerSource = 30,
-): Promise<SourceResult[]> {
-  const results = await Promise.allSettled(
-    sources.map((source) => source.fetch(limitPerSource)),
-  );
+  const hnSource = createHackerNewsSource();
+  const redditSource = createRedditSource(vertical.sources.reddit.subreddits);
+  const githubSource = createGitHubSource(vertical.sources.github.topics);
 
-  return results.map((result, i) => {
+  const settled = await Promise.allSettled([
+    hnSource.fetch(hnLimit),
+    redditSource.fetch(30),
+    githubSource.fetch(30),
+  ]);
+
+  const results: SourceResult[] = settled.map((result, i) => {
+    const sourceName = [hnSource, redditSource, githubSource][i].name;
+
     if (result.status === "fulfilled") return result.value;
 
     return {
-      sourceName: sources[i].name,
+      sourceName,
       articles: [],
       fetchedAt: new Date(),
       error:
@@ -30,8 +35,17 @@ export async function fetchAllSources(
           : "Unknown error",
     };
   });
-}
 
-export function collectArticles(results: SourceResult[]): RawArticle[] {
-  return results.flatMap((result) => result.articles);
+  const articles: RawArticle[] = [];
+
+  for (const result of results) {
+    for (const article of result.articles) {
+      if (article.sourceName !== "HackerNews") {
+        article.vertical = verticalId;
+      }
+      articles.push(article);
+    }
+  }
+
+  return { results, articles };
 }
