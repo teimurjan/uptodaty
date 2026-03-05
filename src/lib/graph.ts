@@ -46,7 +46,6 @@ function createConnection(): FalkorDB | null {
       host,
       port: port ? Number.parseInt(port, 10) : 6379,
       connectTimeout: 10000,
-      reconnectStrategy: false,
       ...(useTls ? { tls: true } : {}),
     },
     ...(username ? { username } : {}),
