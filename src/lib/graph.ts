@@ -39,13 +39,15 @@ function createConnection(): FalkorDB | null {
 
   if (!host) return null;
 
-  const isCloud = host.includes(".cloud");
+  const useTls = process.env.FALKORDB_TLS === "true";
 
   return FalkorDB.connect({
     socket: {
       host,
       port: port ? Number.parseInt(port, 10) : 6379,
-      ...(isCloud ? { tls: true } : {}),
+      connectTimeout: 10000,
+      reconnectStrategy: false,
+      ...(useTls ? { tls: true } : {}),
     },
     ...(username ? { username } : {}),
     ...(password ? { password } : {}),
@@ -88,13 +90,14 @@ export async function connectGraphDirect(): Promise<{
   const port = Number.parseInt(process.env.FALKORDB_PORT ?? "6379", 10);
   const username = process.env.FALKORDB_USERNAME;
   const password = process.env.FALKORDB_PASSWORD;
-  const isCloud = host.includes(".cloud");
+  const useTls = process.env.FALKORDB_TLS === "true";
 
   const connection = await FalkorDB.connect({
     socket: {
       host,
       port,
-      ...(isCloud ? { tls: true } : {}),
+      connectTimeout: 10000,
+      ...(useTls ? { tls: true } : {}),
     },
     ...(username ? { username } : {}),
     ...(password ? { password } : {}),
